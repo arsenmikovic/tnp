@@ -1,0 +1,84 @@
+generators:
+  train:
+    _target_: tnp.data.gp.B2SplitRevealGPGenerator
+    dim: ${params.dim_x}
+    kernel:
+      - ${cont_gibbs_kernel}
+    noise_std: 0.1
+    min_nc: 32
+    max_nc: 64
+    min_nt: 3
+    max_nt: 16
+    context_range: ${params.context_range}
+    target_range: ${params.target_range}
+    samples_per_epoch: 16_000
+    batch_size: 8
+  val:
+    _target_: tnp.data.gp.B2SplitRevealGPGenerator
+    dim: ${params.dim_x}
+    kernel:
+      - ${cont_gibbs_kernel}
+    noise_std: 0.1
+    min_nc: 32
+    max_nc: 64
+    min_nt: 3
+    max_nt: 16
+    context_range: ${params.context_range}
+    target_range: ${params.target_range}
+    samples_per_epoch: 4096
+    batch_size: 8
+    deterministic: True
+  test:
+    _target_: tnp.data.gp.B2SplitRevealGPGenerator
+    dim: ${params.dim_x}
+    kernel:
+      - ${cont_gibbs_kernel}
+    noise_std: 0.1
+    min_nc: 32
+    max_nc: 64
+    min_nt: 3
+    max_nt: 16
+    context_range: ${params.context_range}
+    target_range: ${params.target_range}
+    samples_per_epoch: 4096
+    batch_size: 8
+    deterministic: True
+
+cont_gibbs_kernel:
+  _target_: tnp.networks.gp.RandomContinuousGibbsKernel
+  _partial_: True
+  b1_range: ${params.b1_range}
+  b2_range: ${params.b2_range}
+  width: ${params.width}
+  ell_min_values: ${params.ell_min_values}
+  ell_max_values: ${params.ell_max_values}
+
+
+params:
+  dim_x: 1
+  dim_y: 1
+  context_range: [[-8.0, 8.0]]
+  target_range: [[0.0, 8.0]]
+  b1_range: [-8.0, 0.0]
+  b2_range: [0.0, 8.0]
+  width: 0.1
+  ell_min_values: [0.1, 0.2, 0.5]
+  ell_max_values: [0.5, 1.0, 2.0]
+  reveal_frac_range: [0.0, 1.0]
+  min_log10_lengthscale: -0.602
+  max_log10_lengthscale: 0.0
+  min_log10_period: 0.301
+  max_log10_period: 0.301
+
+
+misc:
+  project: gp-Arsen-Nihar
+  eval_name: test
+  seed: 1
+  only_plots: True
+  num_plots: 10
+  subplots: True
+  savefig: False
+  logging: True
+  plot_interval: 1
+  check_val_every_n_epoch: 1

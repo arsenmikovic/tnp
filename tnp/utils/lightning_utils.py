@@ -65,13 +65,13 @@ class LitWrapper(pl.LightningModule):
         self.log("val/rmse", rmse, on_step=False, on_epoch=True, prog_bar=True)
 
         if hasattr(batch, "gt_pred") and batch.gt_pred is not None:
-            _, _, gt_loglik = batch.gt_pred(
-                xc=batch.xc, yc=batch.yc, xt=batch.xt, yt=batch.yt
-            )
-            gt_loglik = gt_loglik.sum() / batch.yt[..., 0].numel()
-            self.log(
-                "val/gt_loglik", gt_loglik, on_step=False, on_epoch=True, prog_bar=True
-            )
+            gt = batch.gt_pred
+            xc, yc, xt, yt = batch.xc.cpu(), batch.yc.cpu(), batch.xt.cpu(), batch.yt.cpu()
+            _, _, gt_loglik = gt(xc=xc, yc=yc, xt=xt, yt=yt)
+
+            gt_loglik = gt_loglik.sum() / yt[..., 0].numel()
+            self.log("val/gt_loglik", gt_loglik, on_step=False, on_epoch=True, prog_bar=True)
+
 
     def test_step(  # pylint: disable=arguments-differ
         self, batch: Batch, batch_idx: int
@@ -87,11 +87,13 @@ class LitWrapper(pl.LightningModule):
         result["rmse"] = rmse
 
         if hasattr(batch, "gt_pred") and batch.gt_pred is not None:
-            _, _, gt_loglik = batch.gt_pred(
-                xc=batch.xc, yc=batch.yc, xt=batch.xt, yt=batch.yt
-            )
-            gt_loglik = gt_loglik.sum() / batch.yt[..., 0].numel()
+            gt = batch.gt_pred
+            xc, yc, xt, yt = batch.xc.cpu(), batch.yc.cpu(), batch.xt.cpu(), batch.yt.cpu()
+            _, _, gt_loglik = gt(xc=xc, yc=yc, xt=xt, yt=yt)
+
+            gt_loglik = gt_loglik.sum() / yt[..., 0].numel()
             result["gt_loglik"] = gt_loglik.cpu()
+
 
         self.test_outputs.append(result)
 

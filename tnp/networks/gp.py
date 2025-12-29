@@ -6,7 +6,12 @@ from typing import Tuple
 import gpytorch
 import torch
 
-from tnp.networks.kernels import GibbsKernel, gibbs_switching_lengthscale_fn
+from tnp.networks.kernels import (
+    GibbsKernel,
+    gibbs_switching_lengthscale_fn,
+    gibbs_two_sigmoid_lengthscale_fn,
+)
+
 
 
 class RandomHyperparameterKernel(ABC, gpytorch.kernels.Kernel):
@@ -153,3 +158,88 @@ class RandomGibbsKernel(GibbsKernel, RandomHyperparameterKernel):
             changepoint=changepoint,
             direction=direction,
         )
+
+
+
+"""
+Arsen and Nihar
+
+"""
+
+class RandomContinuousGibbsKernel(GibbsKernel, RandomHyperparameterKernel):
+    """
+    Gibbs kernel with a continuous two-sigmoid window lengthscale.
+
+    b1,b2 sampled uniformly from ranges (with b1<b2 enforced).
+    width is a fixed float (from YAML).
+    ell_min, ell_max sampled from provided candidate lists (from YAML).
+    """
+
+    def __init__(
+        self,
+        *,
+        # sample uniformly
+        b1_range: Tuple[float, float] = (-2.0, 0.0),
+        b2_range: Tuple[float, float] = (0.0, 2.0),
+
+        # fixed
+        width: float = 0.1,
+
+        # sample from discrete sets
+        ell_min_values: Tuple[float, ...] = (0.1, 0.3, 1.0),
+        ell_max_values: Tuple[float, ...] = (2.0, 4.0, 8.0),
+
+        **kwargs,
+    ):
+        super().__init__(**kwargs)
+        self.b1_range = tuple(b1_range)
+        self.b2_range = tuple(b2_range)
+        self.width = float(width)
+
+        self.ell_min_values = tuple(ell_min_values)
+        self.ell_max_values = tuple(ell_max_values)
+
+        # placeholders for inspection
+        self.b1 = None
+        self.b2 = None
+        self.ell_min = None
+        self.ell_max = None
+
+    def _sample_uniform(self, lo: float, hi: float) -> float:
+        return float((lo + (hi - lo) * torch.rand(())).item())
+
+    def sample_hyperparameters(self):
+        # sample b1, b2 and enforce b1 < b2
+        b1 = self._sample_uniform(*self.b1_range)
+        b2 = self._sample_uniform(*self.b2_range)
+        if b2 < b1:
+            b1, b2 = b2, b1
+
+        # sample ell_min/ell_max from discrete candidate lists
+        ell_min = float(random.choice(self.ell_min_values))
+        ell_max = float(random.choice(self.ell_max_values))
+        if ell_max < ell_min:
+            ell_min, ell_max = ell_max, ell_min
+
+        # store for logging/inspection
+        self.b1 = float(b1)
+        self.b2 = float(b2)
+        self.ell_min = float(ell_min)
+        self.ell_max = float(ell_max)
+
+        self.lengthscale_fn = partial(
+            gibbs_two_sigmoid_lengthscale_fn,
+            b1=self.b1,
+            b2=self.b2,
+            width=self.width,
+            ell_min=self.ell_min,
+            ell_max=self.ell_max,
+        )
+
+# kernel:
+#   _target_: tnp.networks.gp.RandomContinuousGibbsKernel
+#   b1_range: [-7.0, -5.0]
+#   b2_range: [5.0, 7.0]
+#   width: 0.1
+#   ell_min_values: [0.1, 0.2, 0.5]
+#   ell_max_values: [0.5, 1.0, 2.0]

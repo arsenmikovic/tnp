@@ -79,3 +79,33 @@ def gibbs_switching_lengthscale_fn(
         torch.ones_like(x) * lengthscale_high,
         torch.ones_like(x) * lengthscale_low,
     )
+
+"""
+Arsen and Nihar
+
+"""
+
+def gibbs_two_sigmoid_lengthscale_fn(
+    x: torch.Tensor,
+    b1: float,
+    b2: float,
+    width: float,
+    ell_min: float,
+    ell_max: float,
+) -> torch.Tensor:
+    """
+    Continuous lengthscale l(x) using two sigmoids.
+
+    combined = (sigmoid((x-b1)/width) - sigmoid((x-b2)/width))  (in [0,1])
+    l(x) = ell_max + (ell_min - ell_max) * combined
+
+    x: (..., D) but we use the first dim -> (..., 1)
+    returns: (..., 1)
+    """
+    t = x[..., :1].to(dtype=torch.float32)
+
+    s1 = torch.sigmoid((t - b1) / width)
+    s2 = torch.sigmoid((t - b2) / width)
+
+    combined = (s1 - s2)
+    return ell_max + (ell_min - ell_max) * combined
