@@ -24,7 +24,7 @@ def plot(
     batches: List[Batch],
     num_fig: int = 5,
     figsize: Tuple[float, float] = (8.0, 6.0),
-    x_range: Tuple[float, float] = (-4.0, 4.0),
+    x_range: Tuple[float, float] = (-4.0, 5.0),
     y_lim: Tuple[float, float] = (-3.0, 3.0),
     points_per_dim: int = 64,
     name: str = "plot",
@@ -34,12 +34,12 @@ def plot(
 ):
     steps = int(points_per_dim * (x_range[1] - x_range[0]))
 
-    # x_plot = torch.linspace(x_range[0], x_range[1], steps).to(batches[0].xc)[
-    #     None, :, None
-    # ]
-    x_plot = torch.linspace(-8, 8, steps).to(batches[0].xc)[
+    x_plot = torch.linspace(x_range[0], x_range[1], steps).to(batches[0].xc)[
         None, :, None
     ]
+    # x_plot = torch.linspace(-8, 8, steps).to(batches[0].xc)[
+    #     None, :, None
+    # ]
     for i in range(num_fig):
         batch = batches[i]
         xc = batch.xc[:1]
@@ -102,34 +102,22 @@ def plot(
         title_str = f"$N = {xc.shape[1]}$ NLL = {model_nll:.3f}"
 
         if isinstance(batch, SyntheticBatch) and batch.gt_pred is not None:
-            # ---- GT predictor: force CPU for gpytorch sanity (DDP can move stuff to GPU) ----
-            gt = batch.gt_pred
-            base = getattr(gt, "base_gt_pred", gt)  # unwrap wrapper if you have one
-            base.kernel = base.kernel.cpu()
-            base.likelihood = base.likelihood.cpu()
-
-            xc_cpu = xc.cpu()
-            yc_cpu = yc.cpu()
-            xt_cpu = xt.cpu()
-            yt_cpu = yt.cpu()
-            xplot_cpu = x_plot.cpu()
-
             with torch.no_grad():
-                gt_mean, gt_std, _ = gt(
-                    xc=xc_cpu,
-                    yc=yc_cpu,
-                    xt=xplot_cpu,
+                gt_mean, gt_std, _ = batch.gt_pred(
+                    xc=xc,
+                    yc=yc,
+                    xt=x_plot,
                 )
-                _, _, gt_loglik = gt(
-                    xc=xc_cpu,
-                    yc=yc_cpu,
-                    xt=xt_cpu,
-                    yt=yt_cpu,
+                _, _, gt_loglik = batch.gt_pred(
+                    xc=xc,
+                    yc=yc,
+                    xt=xt,
+                    yt=yt,
                 )
-
-                gt_loglik = gt_loglik[:1]  # keep your existing caching workaround
-                gt_nll = -gt_loglik.sum() / yt_cpu[..., 0].numel()
-
+                gt_loglik = gt_loglik[
+                    :1
+                ]  # Need to do this because we cache during validation
+                gt_nll = -gt_loglik.sum() / yt[..., 0].numel()
 
             #Plot ground truth
             plt.plot(

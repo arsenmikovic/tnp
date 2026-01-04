@@ -109,7 +109,7 @@ params:
 
 
 misc:
-  project: gp-reversal
+  project: gp-reversal-linear-attention
   eval_name: test
   seed: 1
   only_plots: True

@@ -66,7 +66,7 @@ class LitWrapper(pl.LightningModule):
 
         if hasattr(batch, "gt_pred") and batch.gt_pred is not None:
             gt = batch.gt_pred
-            xc, yc, xt, yt = batch.xc.cpu(), batch.yc.cpu(), batch.xt.cpu(), batch.yt.cpu()
+            xc, yc, xt, yt = batch.xc, batch.yc, batch.xt, batch.yt
             _, _, gt_loglik = gt(xc=xc, yc=yc, xt=xt, yt=yt)
 
             gt_loglik = gt_loglik.sum() / yt[..., 0].numel()
@@ -88,7 +88,7 @@ class LitWrapper(pl.LightningModule):
 
         if hasattr(batch, "gt_pred") and batch.gt_pred is not None:
             gt = batch.gt_pred
-            xc, yc, xt, yt = batch.xc.cpu(), batch.yc.cpu(), batch.xt.cpu(), batch.yt.cpu()
+            xc, yc, xt, yt = batch.xc, batch.yc, batch.xt, batch.yt
             _, _, gt_loglik = gt(xc=xc, yc=yc, xt=xt, yt=yt)
 
             gt_loglik = gt_loglik.sum() / yt[..., 0].numel()

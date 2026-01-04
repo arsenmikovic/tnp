@@ -5,10 +5,10 @@ generators:
     kernel:
       - ${cont_gibbs_kernel}
     noise_std: 0.1
-    min_nc: 32
-    max_nc: 64
-    min_nt: 3
-    max_nt: 16
+    min_nc: 128
+    max_nc: 128
+    min_nt: 32
+    max_nt: 32
     context_range: ${params.context_range}
     target_range: ${params.target_range}
     samples_per_epoch: 16_000
@@ -19,10 +19,10 @@ generators:
     kernel:
       - ${cont_gibbs_kernel}
     noise_std: 0.1
-    min_nc: 32
-    max_nc: 64
-    min_nt: 3
-    max_nt: 16
+    min_nc: 128
+    max_nc: 128
+    min_nt: 32
+    max_nt: 32
     context_range: ${params.context_range}
     target_range: ${params.target_range}
     samples_per_epoch: 4096
@@ -34,10 +34,10 @@ generators:
     kernel:
       - ${cont_gibbs_kernel}
     noise_std: 0.1
-    min_nc: 32
-    max_nc: 64
-    min_nt: 3
-    max_nt: 16
+    min_nc: 128
+    max_nc: 128
+    min_nt: 32
+    max_nt: 32
     context_range: ${params.context_range}
     target_range: ${params.target_range}
     samples_per_epoch: 4096

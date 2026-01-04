@@ -200,13 +200,29 @@ class RandomContinuousGibbsKernel(GibbsKernel, RandomHyperparameterKernel):
         self.ell_max_values = tuple(ell_max_values)
 
         # placeholders for inspection
-        self.b1 = None
-        self.b2 = None
-        self.ell_min = None
-        self.ell_max = None
+        self.register_buffer("b1", torch.tensor(0.0))
+        self.register_buffer("b2", torch.tensor(0.0))
+        self.register_buffer("ell_min", torch.tensor(0.0))
+        self.register_buffer("ell_max", torch.tensor(0.0))
+        
+        self.lengthscale_fn = self._dynamic_lengthscale_fn
 
+    @property
+    def device(self):
+        return self.b1.device
+    
     def _sample_uniform(self, lo: float, hi: float) -> float:
         return float((lo + (hi - lo) * torch.rand(())).item())
+
+    def _dynamic_lengthscale_fn(self, x):
+        return gibbs_two_sigmoid_lengthscale_fn(
+            x,
+            b1=self.b1,
+            b2=self.b2,
+            width=self.width,
+            ell_min=self.ell_min,
+            ell_max=self.ell_max,
+        )
 
     def sample_hyperparameters(self):
         # sample b1, b2 and enforce b1 < b2
@@ -222,19 +238,11 @@ class RandomContinuousGibbsKernel(GibbsKernel, RandomHyperparameterKernel):
             ell_min, ell_max = ell_max, ell_min
 
         # store for logging/inspection
-        self.b1 = float(b1)
-        self.b2 = float(b2)
-        self.ell_min = float(ell_min)
-        self.ell_max = float(ell_max)
-
-        self.lengthscale_fn = partial(
-            gibbs_two_sigmoid_lengthscale_fn,
-            b1=self.b1,
-            b2=self.b2,
-            width=self.width,
-            ell_min=self.ell_min,
-            ell_max=self.ell_max,
-        )
+        device = self.device
+        self.b1.copy_(torch.tensor(b1, device=device))
+        self.b2.copy_(torch.tensor(b2, device=device))
+        self.ell_min.copy_(torch.tensor(ell_min, device=device))
+        self.ell_max.copy_(torch.tensor(ell_max, device=device))
 
 # kernel:
 #   _target_: tnp.networks.gp.RandomContinuousGibbsKernel

@@ -246,7 +246,7 @@ def main():
     )
 
     # 10 plots: reveal 0%,10%,...,90% of targets into and context deletion
-    for pct in range(20, 100, 20):
+    for pct in range(0, 100, 20):
         frac = pct / 100.0
         k = int(frac * nt)
         k = max(0, min(k, nt - 1))  # keep >=1 target to predict

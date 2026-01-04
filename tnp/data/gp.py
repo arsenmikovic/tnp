@@ -83,6 +83,7 @@ class GPGroundTruthPredictor(GroundTruthPredictor):
                 train_inputs=xc_,
                 train_targets=yc_[..., 0],
             )
+            gp_model = gp_model.to(device)
             gp_model.eval()
             gp_model.likelihood.eval()
             with torch.no_grad():
@@ -127,7 +128,7 @@ class GPGroundTruthPredictor(GroundTruthPredictor):
             gt_loglik = gt_loglik.to(old_device)
 
         return mean, std, gt_loglik
-
+        
     def sample_outputs(
         self, x: torch.Tensor, sample_shape: torch.Size = torch.Size()
     ) -> torch.Tensor:
@@ -703,7 +704,7 @@ class B2SplitGPGroundTruthPredictor(GroundTruthPredictor):
 
     def sample_outputs(self, x: torch.Tensor, sample_shape: torch.Size = torch.Size()):
         self._ensure_base_on(x.device)
-        return self.base_gt_pred.sample_outputs(x, sample_shape)
+        return self.base_gt_pred.sample_outputs(x)
 
 
 
@@ -841,6 +842,11 @@ class B2SplitRevealGPGenerator(RandomScaleGPGenerator):
         yc_new = torch.cat([yc_left, yr_reveal], dim=1)
         xt_new = xr_test
         yt_new = yr_test
+
+        if torch.rand((), device=device) < 0.5:
+            # flip x
+            xc_new = -xc_new
+            xt_new = -xt_new
 
         x = torch.cat([xc_new, xt_new], dim=1)
         y = torch.cat([yc_new, yt_new], dim=1)
