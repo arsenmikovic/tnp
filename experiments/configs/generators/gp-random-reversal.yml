@@ -102,7 +102,7 @@ params:
   dim_y: 1
   context_range: [[-4.0, 0.0]]
   target_range: [[0.0, 4.0]]
-  reversal_point_range: [0.0, 1.0]
+  reversal_point_range: [0.0, 0.2]
   min_log10_lengthscale: -0.602
   max_log10_lengthscale: 0.0
   min_log10_period: 0.301
@@ -110,7 +110,7 @@ params:
 
 
 misc:
-  project: gp-reversal-inference
+  project: gp-reversal-inference-linear-attention
   eval_name: test
   seed: 1
   only_plots: True

@@ -3,6 +3,7 @@ import time
 from typing import Any, Callable, List, Optional
 
 import lightning.pytorch as pl
+from lightning.pytorch.callbacks import Callback
 import torch
 from torch import nn
 
@@ -229,6 +230,76 @@ class LogPerformanceCallback(pl.Callback):
         self.between_step_time = time.time()
 
 
+class DetailedTimingCallback(Callback):
+    def on_train_epoch_start(self, trainer, pl_module):
+        # 1. Reset Timing
+        self.epoch_start_time = time.time()
+        self.train_process_time = 0.0
+        
+        # 2. Reset Memory Stats for the new epoch
+        # This ensures we aren't seeing peaks from previous epochs
+        if torch.cuda.is_available():
+            torch.cuda.reset_peak_memory_stats()
+            torch.cuda.reset_accumulated_memory_stats()
+        
+        self.peak_mem_train_step = 0.0
+
+    def on_train_batch_start(self, trainer, pl_module, batch, batch_idx):
+        if torch.cuda.is_available():
+            torch.cuda.synchronize()
+        self.batch_start_time = time.time()
+
+    def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx):
+        if torch.cuda.is_available():
+            torch.cuda.synchronize()
+            
+            # --- MEMORY TRACKING (Training Phase) ---
+            # Capture peak memory seen specifically during this batch
+            current_peak = torch.cuda.max_memory_allocated()
+            if current_peak > self.peak_mem_train_step:
+                self.peak_mem_train_step = current_peak
+        
+        # --- TIMING TRACKING ---
+        self.train_process_time += (time.time() - self.batch_start_time)
+
+    def on_train_epoch_end(self, trainer, pl_module):
+        # 1. Time Calculations
+        total_time = time.time() - self.epoch_start_time
+        overhead_time = total_time - self.train_process_time
+        duty_cycle = (self.train_process_time / total_time) * 100 if total_time > 0 else 0
+
+        # 2. Memory Calculations
+        # This captures the peak for the WHOLE epoch (Training + Validation + Data Loading)
+        # because we only reset at the very start of the epoch.
+        if torch.cuda.is_available():
+            peak_mem_total = torch.cuda.max_memory_allocated()
+        else:
+            peak_mem_total = 0.0
+
+        # Convert bytes to GB
+        to_gb = 1 / (1024 ** 3)
+        peak_train_gb = self.peak_mem_train_step * to_gb
+        peak_total_gb = peak_mem_total * to_gb
+
+        # 3. Log everything
+        metrics = {
+            # Timing
+            "timing/epoch_total_sec": total_time,
+            "timing/train_process_sec": self.train_process_time,
+            "timing/overhead_sec": overhead_time,
+            "timing/gpu_duty_cycle_pct": duty_cycle,
+            
+            # Memory
+            "memory/max_train_gb": peak_train_gb,  # Peak during strictly training steps
+            "memory/max_epoch_gb": peak_total_gb,  # Peak during entire epoch (incl. Val)
+        }
+        pl_module.log_dict(metrics, prog_bar=False)
+        
+        # 4. Print to console
+        if trainer.is_global_zero:
+            print(f"\n[Stats] Time: {total_time:.2f}s (Train: {self.train_process_time:.2f}s) | "
+                  f"Mem: {peak_total_gb:.2f}GB (Train Peak: {peak_train_gb:.2f}GB)")
+            
 def _batch_to_cpu(batch: Batch):
     batch_kwargs = {
         field.name: (

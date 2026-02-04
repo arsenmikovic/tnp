@@ -13,8 +13,8 @@ Example:
 python experiments/reversal_inference_AR_linear_attn.py \
   --ckpt_a gp-reversal-inference/2ypx1r6i/checkpoints/epoch=499-step=1000000.ckpt \
   --ckpt_b gp-reversal-inference-linear-attention/vbp8okjt/checkpoints/epoch=499-step=1000000.ckpt \
-  --config_a experiments/configs/models/tnp.yml experiments/configs/generators/gp-random-reversal.yml \
-  --config_b experiments/configs/models/lin_tnp.yml experiments/configs/generators/gp-random-reversal.yml \
+  --config_a experiments/configs/models/tnp.yml \
+  --config_b experiments/configs/models/lin_tnp.yml \
   --nc 64 \
   --label_a "TNP" \
   --label_b "TNP-linAttn" \
@@ -44,28 +44,28 @@ from tnp.utils.experiment_utils import initialize_experiment
 # helpers
 # ---------------------------
 
-def init_experiment_from_configs(config_paths: List[str]):
-    """
-    Your initialize_experiment() reads config paths from CLI.
-    We spoof sys.argv to build two separate experiments in one script.
-    """
-    old_argv = sys.argv[:]
-    prog = old_argv[0] if old_argv else "compare_two_models_3graphs.py"
-    last_err = None
+# def init_experiment_from_configs(config_paths: List[str]):
+#     """
+#     Your initialize_experiment() reads config paths from CLI.
+#     We spoof sys.argv to build two separate experiments in one script.
+#     """
+#     old_argv = sys.argv[:]
+#     prog = old_argv[0] if old_argv else "compare_two_models_3graphs.py"
+#     last_err = None
 
-    for argv in ([prog, "--config", *config_paths], [prog, *config_paths]):
-        try:
-            sys.argv = argv
-            exp = initialize_experiment()
-            return exp
-        except SystemExit as e:
-            last_err = e
-        except Exception as e:
-            last_err = e
-        finally:
-            sys.argv = old_argv
+#     for argv in ([prog, "--config", *config_paths], [prog, *config_paths]):
+#         try:
+#             sys.argv = argv
+#             exp = initialize_experiment()
+#             return exp
+#         except SystemExit as e:
+#             last_err = e
+#         except Exception as e:
+#             last_err = e
+#         finally:
+#             sys.argv = old_argv
 
-    raise RuntimeError(f"Failed to init experiment from configs={config_paths}. Last error: {last_err}")
+#     raise RuntimeError(f"Failed to init experiment from configs={config_paths}. Last error: {last_err}")
 
 
 def load_model_weights_from_litwrapper_ckpt(model: torch.nn.Module, ckpt_path: str):
@@ -268,11 +268,11 @@ def main():
     device = torch.device(args.device if (args.device != "cpu" and torch.cuda.is_available()) else "cpu")
 
     # Build both experiments (configs)
-    exp_a = init_experiment_from_configs(args.config_a)
-    exp_b = init_experiment_from_configs(args.config_b)
-
-    model_a, pred_fn_a = exp_a.model, exp_a.misc.pred_fn
-    model_b, pred_fn_b = exp_b.model, exp_b.misc.pred_fn
+    # exp_a = init_experiment_from_configs(args.config_a)
+    # exp_b = init_experiment_from_configs(args.config_b)
+    exp_a, exp_b = initialize_experiment(), initialize_experiment()
+    pred_fn_a, pred_fn_b = exp_a.misc.pred_fn, exp_b.misc.pred_fn
+    model_a, model_b = exp_a.model, exp_b.model
 
     # Load weights
     load_model_weights_from_litwrapper_ckpt(model_a, args.ckpt_a)

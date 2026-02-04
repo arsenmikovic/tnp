@@ -178,6 +178,7 @@ def main():
         seed = (int(time.time() * 1000) ^ (os.getpid() << 16) ^ random.getrandbits(32)) % (2**32)
     else:
         seed = int(args.seed) % (2**32)
+    #seed = int(123)
 
     pl.seed_everything(seed, workers=True)
     random.seed(seed)
@@ -245,39 +246,13 @@ def main():
         },
     )
 
-    # 10 plots: reveal 0%,10%,...,90% of targets into and context deletion
-    for pct in range(0, 100, 20):
-        frac = pct / 100.0
-        k = int(frac * nt)
-        k = max(0, min(k, nt - 1))  # keep >=1 target to predict
-
-        b_reveal = make_no_context_batch(batch, k)
-
-        nll = compute_nll(model, pred_fn, b_reveal)
-        wandb.log({f"nll/reveal_{pct:02d}pct": nll})
-
-        tag = f"reveal_{pct:02d}pct_nc{args.nc}_nt{nt}"
-        if r is not None:
-            tag += f"_r{r:.3f}"
-
-        plot(
-            model=model,
-            batches=[b_reveal],
-            num_fig=1,
-            x_range=(args.x_min, args.x_max),
-            points_per_dim=args.points_per_dim,
-            name=f"progressive/{tag}",
-            logging=True,
-            savefig=False,
-            pred_fn=pred_fn,
-        )
-
     for pct in range(0, 100, 20):
         frac = pct / 100.0
         k = int(frac * nt)
         k = max(0, min(k, nt - 1))  # keep >=1 target to predict
 
         b_reveal = make_reveal_batch(batch, k)
+        #b_reveal = make_no_context_batch(batch, k)
 
         nll = compute_nll(model, pred_fn, b_reveal)
         wandb.log({f"nll/reveal_{pct:02d}pct": nll})
@@ -290,35 +265,35 @@ def main():
             model=model,
             batches=[b_reveal],
             num_fig=1,
-            x_range=(args.x_min, args.x_max),
+            x_range=(args.x_min, 5.0),
             points_per_dim=args.points_per_dim,
-            name=f"progressive/{tag}",
+            name=f"progressive",
             logging=True,
             savefig=False,
             pred_fn=pred_fn,
         )
 
-    k, e = 2 * nt // 5, 3 * nt // 5
-    b_win = make_window_reveal_batch(batch, k, e)
+    # k, e = 2 * nt // 5, 3 * nt // 5
+    # b_win = make_window_reveal_batch(batch, k, e)
 
-    nll_win = compute_nll(model, pred_fn, b_win)
-    wandb.log({"nll/window": nll_win})
+    # nll_win = compute_nll(model, pred_fn, b_win)
+    # wandb.log({"nll/window": nll_win})
 
-    tag_win = f"window_k{k}_e{e}_nc{args.nc}_nt{nt}"
-    if r is not None:
-        tag_win += f"_r{r:.3f}"
+    # tag_win = f"window_k{k}_e{e}_nc{args.nc}_nt{nt}"
+    # if r is not None:
+    #     tag_win += f"_r{r:.3f}"
 
-    plot(
-        model=model,
-        batches=[b_win],
-        num_fig=1,
-        x_range=(args.x_min, args.x_max),
-        points_per_dim=args.points_per_dim,
-        name=f"progressive/{tag_win}",
-        logging=True,
-        savefig=False,
-        pred_fn=pred_fn,
-    )
+    # plot(
+    #     model=model,
+    #     batches=[b_win],
+    #     num_fig=1,
+    #     x_range=(args.x_min, args.x_max),
+    #     points_per_dim=args.points_per_dim,
+    #     name=f"progressive/{tag_win}",
+    #     logging=True,
+    #     savefig=False,
+    #     pred_fn=pred_fn,
+    # )
 
     wandb.finish()
     print(
@@ -342,3 +317,6 @@ if __name__ == "__main__":
 #   --device cuda \
 #   --config experiments/configs/models/tnp.yml \
 #   experiments/configs/generators/gp-random-reversal.yml
+
+
+# linear attention version:

@@ -1,6 +1,6 @@
 generators:
   train:
-    _target_: tnp.data.gp.PartialRevealRandomFlipGPGenerator
+    _target_: tnp.data.gp.RandomReversalGPGeneratorv2
     dim: ${params.dim_x}
     kernel:
       - ${rbf_kernel}
@@ -11,15 +11,21 @@ generators:
     noise_std: 0.1
     min_nc: 32
     max_nc: 64
-    min_nt: 1
+    min_nt: 32
     max_nt: 64
     context_range: ${params.context_range}
     target_range: ${params.target_range}
-    reveal_frac_range: ${params.reveal_frac_range}
+    reversal_range: ${params.reversal_range}
+    priming_frac_range: ${params.priming_frac_range}
     samples_per_epoch: 16_000
     batch_size: 8
+    same_targets: ${params.same_targets}
+    shared_noise:  ${params.shared_noise}
+    targets_only_outside_context: ${params.targets_only_outside_context}
+    bidirectional_reversal: ${params.bidirectional_reversal}
+    context_in_targets: ${params.context_in_targets}
   val:
-    _target_: tnp.data.gp.PartialRevealRandomFlipGPGenerator
+    _target_: tnp.data.gp.RandomReversalGPGeneratorv2
     dim: ${params.dim_x}
     kernel:
       - ${rbf_kernel}
@@ -30,16 +36,22 @@ generators:
     noise_std: 0.1
     min_nc: 32
     max_nc: 64
-    min_nt: 1
+    min_nt: 32
     max_nt: 64
     context_range: ${params.context_range}
     target_range: ${params.target_range}
-    reveal_frac_range: ${params.reveal_frac_range}
+    reversal_range: ${params.reversal_range}
+    priming_frac_range: ${params.priming_frac_range}
     samples_per_epoch: 4096
     batch_size: 8
     deterministic: True
+    same_targets: ${params.same_targets}
+    shared_noise: ${params.shared_noise}
+    targets_only_outside_context: ${params.targets_only_outside_context}
+    bidirectional_reversal: ${params.bidirectional_reversal}
+    context_in_targets: ${params.context_in_targets}
   test:
-    _target_: tnp.data.gp.PartialRevealRandomFlipGPGenerator
+    _target_: tnp.data.gp.RandomReversalGPGeneratorv2
     dim: ${params.dim_x}
     kernel:
       - ${rbf_kernel}
@@ -50,14 +62,19 @@ generators:
     noise_std: 0.1
     min_nc: 32
     max_nc: 64
-    min_nt: 1
+    min_nt: 32
     max_nt: 64
     context_range: ${params.context_range}
     target_range: ${params.target_range}
-    reveal_frac_range: ${params.reveal_frac_range}
+    reversal_range: ${params.reversal_range}
+    priming_frac_range: [0, 1.0]
     samples_per_epoch: 4096
     batch_size: 8
     deterministic: True
+    same_targets: False
+    shared_noise: False
+    bidirectional_reversal: ${params.bidirectional_reversal}
+    context_in_targets: ${params.context_in_targets}
 
 rbf_kernel:
   _target_: tnp.networks.gp.RBFKernel
@@ -103,24 +120,31 @@ periodic_kernel:
 params:
   dim_x: 1
   dim_y: 1
-  context_range: [[-4.0, 0.0]]
-  target_range: [[0.0, 4.0]]
-  reversal_point_range: [0.0, 0.2]
-  reveal_frac_range: [0.75, 1.0]
+  context_range: [[-4.0, 4.0]]
+  target_range: [[-4.0, 4.0]]
+  priming_frac_range: [0.0, 1.0]
+  reversal_range: [0.0, 1.0]
   min_log10_lengthscale: -0.602
   max_log10_lengthscale: 0.0
-  min_log10_period: 0.301
+  min_log10_period: 0
   max_log10_period: 0.301
-
+  same_targets: False
+  shared_noise: False
+  targets_only_outside_context: False
+  bidirectional_reversal: False
+  context_in_targets: False
 
 misc:
-  project: gp-reversal-inference-sequential-mamba
-  eval_name: test
+  project: random-reversal-with-priming
+  eval_name: test-interpolation
   seed: 1
   only_plots: True
   num_plots: 10
   subplots: True
   savefig: False
   logging: True
+  plot_gt: True
+  plot_reversal: True
   plot_interval: 1
   check_val_every_n_epoch: 1
+  plot_x_range: [-4.0, 4.0]

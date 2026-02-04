@@ -9,7 +9,7 @@ generators:
       - ${matern52_kernel}
       - ${periodic_kernel}
     noise_std: 0.1
-    min_nc: 1
+    min_nc: 32
     max_nc: 64
     min_nt: 1
     max_nt: 64
@@ -27,7 +27,7 @@ generators:
       - ${matern52_kernel}
       - ${periodic_kernel}
     noise_std: 0.1
-    min_nc: 1
+    min_nc: 32
     max_nc: 64
     min_nt: 1
     max_nt: 64
@@ -46,7 +46,7 @@ generators:
       - ${matern52_kernel}
       - ${periodic_kernel}
     noise_std: 0.1
-    min_nc: 1
+    min_nc: 32
     max_nc: 64
     min_nt: 1
     max_nt: 64

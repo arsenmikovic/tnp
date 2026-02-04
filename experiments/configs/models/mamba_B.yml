@@ -1,0 +1,74 @@
+# mamba_optionA.yaml
+# Context encoded once, then 1-step rollout per target (Option A).
+# Requires MambaEncoderLayer.forward(x, inference_params=...) to pass inference_params into the underlying Mamba module.
+# Recommended: bidirectional_mamba = False for cached/step mode.
+
+model:
+  _target_: tnp.models.tnp.TNP
+  encoder: ${tnp_encoder}
+  decoder: ${tnp_decoder}
+  likelihood: ${likelihood}
+
+tnp_encoder:
+  _target_: tnp.models.tnp.TNPEncoder
+  transformer_encoder: ${transformer_encoder}
+  xy_encoder: ${xy_encoder}
+
+transformer_encoder:
+  _target_: tnp.networks.mamba.SequentialMambaEncoderB
+  mamba_layer: ${mamba_layer}
+  num_layers: ${params.num_layers}
+
+mamba_layer:
+  _target_: tnp.networks.mamba.MambaEncoderLayer
+  embed_dim: ${params.embed_dim}
+  norm: True
+  residual: False
+  mamba2: False
+  enc_conv: False
+  bidirectional_mamba: False  
+  enc_conv_kernel: 5
+  enc_conv_dilation: 0
+  d_state: 128
+  block_expansion: 2
+  d_conv: 4
+
+
+xy_encoder:
+  _target_: tnp.networks.mlp.MLP
+  in_dim: ${eval:'1 + ${params.dim_y} + ${params.dim_x}'}
+  out_dim: ${params.embed_dim}
+  num_layers: 2
+  width: ${params.embed_dim}
+
+tnp_decoder:
+  _target_: tnp.models.tnp.TNPDecoder
+  z_decoder: ${z_decoder}
+
+z_decoder:
+  _target_: tnp.networks.mlp.MLP
+  in_dim: ${params.embed_dim}
+  out_dim: ${eval:'2 * ${params.dim_y}'}
+  num_layers: 2
+  width: ${params.embed_dim}
+
+likelihood:
+  _target_: tnp.likelihoods.gaussian.HeteroscedasticNormalLikelihood
+
+optimiser:
+  _target_: torch.optim.AdamW
+  _partial_: True
+  lr: 5.0e-4
+
+params:
+  epochs: 500
+  dim_x: 1
+  dim_y: 1
+  embed_dim: 128
+  num_layers: 5
+
+misc:
+  name: "Mamba OptionB - context cached then 1-step per target"
+  resume_from_checkpoint: null
+  gradient_clip_val: 0.5
+  plot_interval: 1

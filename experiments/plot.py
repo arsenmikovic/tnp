@@ -37,6 +37,9 @@ def plot(
     x_plot = torch.linspace(x_range[0], x_range[1], steps).to(batches[0].xc)[
         None, :, None
     ]
+    x_plot1 = torch.linspace(0.0, x_range[1], steps).to(batches[0].xc)[
+        None, :, None
+    ]
     # x_plot = torch.linspace(-8, 8, steps).to(batches[0].xc)[
     #     None, :, None
     # ]
@@ -53,7 +56,7 @@ def plot(
         batch.yt = yt
 
         plot_batch = copy.deepcopy(batch)
-        plot_batch.xt = x_plot
+        plot_batch.xt = x_plot1
 
         with torch.no_grad():
             y_plot_pred_dist = pred_fn(model, plot_batch)
@@ -84,14 +87,14 @@ def plot(
 
         # Plot model predictions
         plt.plot(
-            x_plot[0, :, 0].cpu(),
+            x_plot1[0, :, 0].cpu(),
             mean[0, :, 0].cpu(),
             c="tab:blue",
             lw=3,
         )
 
         plt.fill_between(
-            x_plot[0, :, 0].cpu(),
+            x_plot1[0, :, 0].cpu(),
             mean[0, :, 0].cpu() - 2.0 * std[0, :, 0].cpu(),
             mean[0, :, 0].cpu() + 2.0 * std[0, :, 0].cpu(),
             color="tab:blue",

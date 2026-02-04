@@ -1,0 +1,69 @@
+# sequential_mamba_optionA.yaml
+
+model:
+  _target_: tnp.models.tnp.TNP
+  encoder: ${tnp_encoder}
+  decoder: ${tnp_decoder}
+  likelihood: ${likelihood}
+
+tnp_encoder:
+  _target_: tnp.models.tnp.TNPEncoder
+  transformer_encoder: ${transformer_encoder}
+  xy_encoder: ${xy_encoder}
+
+transformer_encoder:
+  _target_: tnp.networks.mamba.SequentialMambaEncoder
+  mamba_layer: ${mamba_layer}
+  num_layers: ${params.num_layers}
+
+mamba_layer:
+  _target_: tnp.networks.mamba.MambaEncoderLayer
+  embed_dim: ${params.embed_dim}
+  norm: True
+  residual: True
+  mamba2: False
+  enc_conv: False
+  enc_conv_kernel: 5
+  enc_conv_dilation: 0
+  d_state: 128
+  block_expansion: 2
+  d_conv: 4
+
+xy_encoder:
+  _target_: tnp.networks.mlp.MLP
+  in_dim: ${eval:'1 + ${params.dim_y} + ${params.dim_x}'}  # mask + y + x
+  out_dim: ${params.embed_dim}
+  num_layers: 2
+  width: ${params.embed_dim}
+
+tnp_decoder:
+  _target_: tnp.models.tnp.TNPDecoder
+  z_decoder: ${z_decoder}
+
+z_decoder:
+  _target_: tnp.networks.mlp.MLP
+  in_dim: ${params.embed_dim}
+  out_dim: ${eval:'2 * ${params.dim_y}'}
+  num_layers: 2
+  width: ${params.embed_dim}
+
+likelihood:
+  _target_: tnp.likelihoods.gaussian.HeteroscedasticNormalLikelihood
+
+optimiser:
+  _target_: torch.optim.AdamW
+  _partial_: True
+  lr: 5.0e-4
+
+params:
+  epochs: 500
+  dim_x: 1
+  dim_y: 1
+  embed_dim: 128
+  num_layers: 10
+
+misc:
+  name: "Sequential Mamba - last hidden state per target"
+  resume_from_checkpoint: null
+  gradient_clip_val: 0.5
+  plot_interval: 1
