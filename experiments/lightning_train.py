@@ -37,7 +37,7 @@ def main():
         pin_memory=True,
     )
     val_loader = torch.utils.data.DataLoader(
-        gen_train,
+        gen_val,
         batch_size=None,
         num_workers=experiment.misc.num_val_workers,
         worker_init_fn=(

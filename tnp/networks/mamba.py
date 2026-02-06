@@ -15,6 +15,8 @@ from .mamba_layers import MambaEncoderLayer
 from .transformer import _get_clones
 # Mamba cache helper
 from mamba_ssm.utils.generation import InferenceParams
+from mamba_ssm import Mamba, Mamba2
+
 
 
 
@@ -75,6 +77,55 @@ class MNP_NDMambaEncoder(nn.Module):
 
 
 """
+Helper functions for fast inference.
+
+"""
+
+def _repeat0(t: torch.Tensor, repeats: int) -> torch.Tensor:
+    return t.repeat_interleave(repeats, dim=0)
+
+def tile_inference_params(inf: InferenceParams, repeats: int, new_max_batch: int) -> InferenceParams:
+    new_inf = copy.copy(inf)
+    new_inf.max_batch_size = new_max_batch
+
+    new_kv = {}
+    for k, v in inf.key_value_memory_dict.items():
+        if torch.is_tensor(v):
+            new_kv[k] = _repeat0(v, repeats)
+        elif isinstance(v, (tuple, list)):
+            out = []
+            for item in v:
+                out.append(_repeat0(item, repeats) if torch.is_tensor(item) else item)
+            new_kv[k] = type(v)(out)
+        elif isinstance(v, dict):
+            out = {}
+            for kk, vv in v.items():
+                out[kk] = _repeat0(vv, repeats) if torch.is_tensor(vv) else vv
+            new_kv[k] = out
+        else:
+            raise TypeError(f"Unsupported cache type: {type(v)} for key {k}")
+
+    new_inf.key_value_memory_dict = new_kv
+    return new_inf
+
+def assign_mamba_layer_indices(root: nn.Module, start: int = 0) -> int:
+    """
+    Assign a unique layer_idx to every Mamba/Mamba2 module under `root`.
+    Required for inference_params caching in mamba_ssm.
+    Returns the next available index.
+    """
+    idx = start
+    for m in root.modules():
+        if isinstance(m, (Mamba, Mamba2)):
+            m.layer_idx = idx
+            idx += 1
+    return idx
+
+
+
+
+
+"""
 A) Sequential Mamba.
 
 For each target point, create a sequence [context tokens..., target token],
@@ -85,9 +136,13 @@ class SequentialMambaEncoder(nn.Module):
     def __init__(self, num_layers: int, mamba_layer: MambaEncoderLayer):
         super().__init__()
         self.mamba_layers = _get_clones(mamba_layer, num_layers)
+        assign_mamba_layer_indices(self)
 
     @check_shapes("xc: [b, nc, d]", "xt: [b, nt, d]", "return: [b, nt, d]")
-    def forward(self, xc: torch.Tensor, xt: torch.Tensor) -> torch.Tensor:
+    def _forward_train(self, xc: torch.Tensor, xt: torch.Tensor) -> torch.Tensor:
+        """
+        training implementation: fully differentiable, no caching.
+        """
         b, nc, d = xc.shape
         _, nt, d2 = xt.shape
         assert d == d2, f"embed dim mismatch: xc has {d}, xt has {d2}"
@@ -95,138 +150,58 @@ class SequentialMambaEncoder(nn.Module):
         # Replicate context for each target: [b, nt, nc, d] -> [b*nt, nc, d]
         xc_rep = xc[:, None, :, :].expand(b, nt, nc, d).reshape(b * nt, nc, d)
 
-        # Make a single target token per replicated context: [b*nt, 1, d]
+        # Target token: [b*nt, 1, d]
         xt_tok = xt.reshape(b * nt, 1, d)
 
         # Full sequence: [b*nt, nc+1, d]
         x = torch.cat([xc_rep, xt_tok], dim=1)
 
-        # Mamba over the sequence
+        # Mamba over full sequence
         for layer in self.mamba_layers:
             x = layer(x)
 
-        # Take ONLY last hidden state as target embedding: [b*nt, d] -> [b, nt, d]
-        h_last = x[:, -1, :].reshape(b, nt, d)
-        return h_last
+        # Only last hidden state: [b*nt, d] -> [b, nt, d]
+        return x[:, -1, :].reshape(b, nt, d)
 
+    @torch.no_grad()
+    def _forward_cached_inference(self, xc: torch.Tensor, xt: torch.Tensor) -> torch.Tensor:
+        """
+        Inference-only cached path:
+          1) Prefill cache with context once
+          2) Branch cache to evaluate all targets as 1-token continuations
+        """
+        b, nc, d = xc.shape
+        _, nt, d2 = xt.shape
+        assert d == d2, f"embed dim mismatch: xc has {d}, xt has {d2}"
 
+        # 1) Prefill cache with context
+        inf = InferenceParams(max_seqlen=nc + 1, max_batch_size=b)
 
-
-
-
-"""
-B) Sequential Mamba Option
-
-    1) Run Mamba over zc ONCE, caching the final internal state.
-    2) For each target token zt_i, run ONE decode step from that same cached state.
-    3) Return [B, Nt, D] (one representation per target).
-
-This plugs into TNPEncoder unchanged (it consumes embedded tokens):
-    zc: [B, Nc, D]
-    zt: [B, Nt, D]
-"""
-
-
-
-
-def _repeat_cache_for_targets(cache: dict, repeat: int) -> dict:
-    out = {}
-    for k, v in cache.items():
-        if isinstance(v, dict):
-            out[k] = _repeat_cache_for_targets(v, repeat)
-        elif isinstance(v, tuple):
-            out[k] = tuple(t.repeat_interleave(repeat, dim=0) for t in v)
-        elif torch.is_tensor(v):
-            out[k] = v.repeat_interleave(repeat, dim=0)
-        else:
-            out[k] = v
-    return out
-
-def _clone_cache(cache: dict) -> dict:
-    # mamba cache is typically: {layer_idx: (conv_state, ssm_state)}
-    out = {}
-    for k, v in cache.items():
-        if isinstance(v, tuple):
-            out[k] = tuple(t.clone() for t in v)
-        elif isinstance(v, dict):
-            out[k] = _clone_cache(v)
-        elif torch.is_tensor(v):
-            out[k] = v.clone()
-        else:
-            out[k] = v
-    return out
-
-
-
-class SequentialMambaEncoderB(nn.Module):
-    def __init__(self, num_layers: int, mamba_layer: MambaEncoderLayer):
-        super().__init__()
-        self.mamba_layers = _get_clones(mamba_layer, num_layers)
-
-        # IMPORTANT: set unique layer_idx for mamba_ssm caching
-        for i, layer in enumerate(self.mamba_layers):
-            if hasattr(layer, "mamba_layer") and hasattr(layer.mamba_layer, "layer_idx"):
-                layer.mamba_layer.layer_idx = i
-            if getattr(layer, "bidirectional_mamba", False) and hasattr(layer, "mamba_layer_backward"):
-                if hasattr(layer.mamba_layer_backward, "layer_idx"):
-                    layer.mamba_layer_backward.layer_idx = i + 10_000  # any distinct index
-
-    @check_shapes(
-        "zc: [b, nc, d]",
-        "zt: [b, nt, d]",
-        "mask: [b, nt, nc]",
-        "return: [b, nt, d]",
-    )
-    def forward(
-        self,
-        zc: torch.Tensor,
-        zt: torch.Tensor,
-        mask: Optional[torch.Tensor] = None,
-    ) -> torch.Tensor:
-        b, nc, d = zc.shape
-        b2, nt, d2 = zt.shape
-        assert b == b2 and d == d2, f"Shape mismatch: zc={zc.shape}, zt={zt.shape}"
-
-        # --------------------------
-        # 1) Encode context once, while building cache
-        # --------------------------
-        # Create inference params + cache containers per layer
-        # NOTE: max_seqlen must be >= nc + 1 (we'll decode 1 token later)
-        inf = InferenceParams(
-            max_seqlen=nc + 1,
-            max_batch_size=b,
-            seqlen_offset=0,
-            key_value_memory_dict={},
-        )
-
-        x = zc
+        x = xc
         for layer in self.mamba_layers:
             x = layer(x, inference_params=inf)
 
-        # Save a *copy* of the context cache state (so targets can branch from it
-        ctx_cache = _clone_cache(inf.key_value_memory_dict)
+        # 2) Branch to targets
+        xt_flat = xt.reshape(b * nt, 1, d)  # [b*nt, 1, d]
+        inf_tiled = tile_inference_params(inf, repeats=nt, new_max_batch=b * nt)
 
-
-        # --------------------------
-        # 2) Decode one step per target (batched as B*Nt)
-        # --------------------------
-        # Expand caches to match batch=B*Nt so every target gets the same context state
-        tgt_cache = _repeat_cache_for_targets(ctx_cache, repeat=nt)
-
-        inf_t = InferenceParams(
-            max_seqlen=nc + 1,
-            max_batch_size=b * nt,
-            seqlen_offset=nc,  # we're decoding AFTER consuming nc context tokens
-            key_value_memory_dict=tgt_cache,
-        )
-
-        # One-token decode inputs: [B*Nt, 1, D]
-        xtok = zt.reshape(b * nt, 1, d)
-
-        y = xtok
+        y = xt_flat
         for layer in self.mamba_layers:
-            y = layer(y, inference_params=inf_t)
+            y = layer(y, inference_params=inf_tiled)
 
-        # y is [B*Nt, 1, D] -> take last token (only token) -> [B, Nt, D]
-        out = y[:, -1, :].reshape(b, nt, d)
-        return out
+        # y: [b*nt, 1, d] -> [b, nt, d]
+        return y[:, 0, :].reshape(b, nt, d)
+
+    @check_shapes("xc: [b, nc, d]", "xt: [b, nt, d]", "return: [b, nt, d]")
+    def forward(self, xc: torch.Tensor, xt: torch.Tensor) -> torch.Tensor:
+        """
+        Automatic routing:
+        - Training / grads enabled -> training path (your current one)
+        - Eval + no grads -> cached inference path
+        """
+        if (not self.training) and (not torch.is_grad_enabled()):
+            return self._forward_cached_inference(xc, xt)
+        return self._forward_train(xc, xt)
+
+
+

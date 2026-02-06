@@ -60,7 +60,7 @@ params:
   dim_x: 1
   dim_y: 1
   embed_dim: 128
-  num_layers: 10
+  num_layers: 5
 
 misc:
   name: "Sequential Mamba - last hidden state per target"
